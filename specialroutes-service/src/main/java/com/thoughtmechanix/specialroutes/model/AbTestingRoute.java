@@ -56,4 +56,13 @@ public class AbTestingRoute {
     }
 
 
+    @Override
+    public String toString() {
+        return "AbTestingRoute{" +
+                "serviceName='" + serviceName + '\'' +
+                ", active='" + active + '\'' +
+                ", endpoint='" + endpoint + '\'' +
+                ", weight=" + weight +
+                '}';
+    }
 }

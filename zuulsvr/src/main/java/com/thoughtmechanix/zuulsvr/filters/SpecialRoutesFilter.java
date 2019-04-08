@@ -18,6 +18,8 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicHttpRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.netflix.zuul.filters.ProxyRequestHelper;
 import org.springframework.http.HttpMethod;
@@ -40,10 +42,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+/**
+ * Implementing a Zuul route filter requires the most coding effort, because with a route filter you’re taking over a
+ * core piece of Zuul functionality, routing, and replacing it with your own functionality.
+ *
+ * The specialroutesservice has a database record for the organization service that will route the requests for calls to
+ * the organization service 50% of the time to the existing organization service (the one mapped in Zuul) and 50% of the
+ * time to an alternative organization service. The alternative organization service route returned from the SpecialRoutes
+ * service will be http://orgservice-new and will not be accessible directly from Zuul.
+ */
 @Component
 public class SpecialRoutesFilter extends ZuulFilter {
     private static final int FILTER_ORDER =  1;
     private static final boolean SHOULD_FILTER =true;
+
+    private static final Logger logger = LoggerFactory.getLogger(SpecialRoutesFilter.class);
 
     @Autowired
     FilterUtils filterUtils;
@@ -66,11 +79,14 @@ public class SpecialRoutesFilter extends ZuulFilter {
         return SHOULD_FILTER;
     }
 
+    // The helper variable is an instance variable of type ProxyRequestHelper class. This is a Spring Cloud class
+    //with helper functions for proxying service requests.
     private ProxyRequestHelper helper = new ProxyRequestHelper();
 
     private AbTestingRoute getAbRoutingInfo(String serviceName){
         ResponseEntity<AbTestingRoute> restExchange = null;
         try {
+            //Calls the SpecialRoutesService endpoint
             restExchange = restTemplate.exchange(
                              "http://specialroutesservice/v1/route/abtesting/{serviceName}",
                              HttpMethod.GET,
@@ -196,40 +212,69 @@ public class SpecialRoutesFilter extends ZuulFilter {
     public boolean useSpecialRoute(AbTestingRoute testRoute){
         Random random = new Random();
 
-        if (testRoute.getActive().equals("N")) return false;
+        if (testRoute.getActive().equals("N")) {
+            logger.debug("SpecialRoutesFilter.useSpecialRoute() - route not active");
+            return false;
+        }
 
         int value = random.nextInt((10 - 1) + 1) + 1;
+        logger.debug("SpecialRoutesFilter.useSpecialRoute() - Random Value: {}, Weight: {}", value, testRoute.getWeight());
 
-        if (testRoute.getWeight()<value) return true;
+        if (testRoute.getWeight()<value) {
+            logger.debug("SpecialRoutesFilter.useSpecialRoute() - Sending the request to the new version of the service...");
+            return true;
+        }
 
         return false;
     }
 
+    /**
+     * The SpecialRoutes service will check an internal database to see if the service name exists. If the targeted service
+     * name exists, it will return a weight and target destination of an alternative location for the service.
+     * The SpecialRoutesFilter will then take the weight returned and, based on the weight, randomly generate a
+     * number that will be used to determine whether the user’s call will be routed to the alternative organization service
+     * or to the organization service defined in the Zuul route mappings.
+     */
     @Override
     public Object run() {
         RequestContext ctx = RequestContext.getCurrentContext();
 
         AbTestingRoute abTestRoute = getAbRoutingInfo( filterUtils.getServiceId() );
+        logger.debug("SpecialRoutesFilter.run() - serviceId {}" , filterUtils.getServiceId());
 
         if (abTestRoute!=null && useSpecialRoute(abTestRoute)) {
+            logger.debug("SpecialRoutesFilter.run() - useSpecialRoute: true, ctx.getRequest().getRequestURI(): {}, " +
+                    " abTestRoute.getEndpoint(): {}, ctx.get(\"serviceId\"): {}", ctx.getRequest().getRequestURI(), abTestRoute.getEndpoint(), ctx.get("serviceId").toString());
+
+            // build the full URL (with path) to the service location specified by the specialroutes service
             String route = buildRouteString(ctx.getRequest().getRequestURI(),
                     abTestRoute.getEndpoint(),
                     ctx.get("serviceId").toString());
-            forwardToSpecialRoute(route);
+            logger.debug("SpecialRoutesFilter.run() - forwardToSpecialRoute: {}", route);
+            forwardToSpecialRoute(route); // does the work of forwarding onto the alternative service
         }
-
+        logger.debug("SpecialRoutesFilter.run() - useSpecialRoute: false");
         return null;
     }
 
+    // NOTE: The code in this method borrows heavily from the source code for the Spring Cloud SimpleHostRoutingFilter class!!!
     private void forwardToSpecialRoute(String route) {
         RequestContext context = RequestContext.getCurrentContext();
         HttpServletRequest request = context.getRequest();
 
+        /**
+         * Copying all of the values from the incoming HTTP request:
+         *  - the header parameters,
+         *  - HTTP verb,
+         *  - the body
+         *  into a new request that will  be invoked on the target service
+         */
         MultiValueMap<String, String> headers = this.helper
                 .buildZuulRequestHeaders(request);
         MultiValueMap<String, String> params = this.helper
                 .buildZuulRequestQueryParams(request);
         String verb = getVerb(request);
+        // Makes a copy of the HTTP Body that will be forwarded onto the alternative service
         InputStream requestEntity = getRequestBody(request);
         if (request.getContentLength() < 0) {
             context.setChunkedRequestBody();
@@ -241,8 +286,12 @@ public class SpecialRoutesFilter extends ZuulFilter {
 
         try {
             httpClient  = HttpClients.createDefault();
+            // Invokes the alternative service using the forward helper method
             response = forward(httpClient, verb, route, request, headers,
                     params, requestEntity);
+            // The forwardToSpecialRoute() method takes the response back from the target service and sets it on the
+            // HTTP request context used by Zuul.
+            // Zuul uses the HTTP request context to return the response back from the calling service client.
             setResponse(response);
         }
         catch (Exception ex ) {

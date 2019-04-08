@@ -22,6 +22,7 @@ public class ResponseFilter extends ZuulFilter{
         return FilterUtils.POST_FILTER_TYPE;
     }
 
+    //To build a post filter you need to set the filter type to be POST_FILTER_TYPE.
     @Override
     public int filterOrder() {
         return FILTER_ORDER;
@@ -36,10 +37,13 @@ public class ResponseFilter extends ZuulFilter{
     public Object run() {
         RequestContext ctx = RequestContext.getCurrentContext();
 
-        logger.debug("Adding the correlation id to the outbound headers. {}", filterUtils.getCorrelationId());
+        logger.debug("4 - ResponseFilter.run() - Adding the correlation id to the outbound headers. {}", filterUtils.getCorrelationId());
         ctx.getResponse().addHeader(FilterUtils.CORRELATION_ID, filterUtils.getCorrelationId());
 
-        logger.debug("Completing outgoing request for {}.", ctx.getRequest().getRequestURI());
+        // Log the outgoing request URI so that you have “bookends” that will show the incoming and outgoing entry
+        // of the user’s request into Zuul.
+        logger.debug("5 - ResponseFilter.run() - Completing outgoing request for {}", ctx.getRequest().getRequestURI());
+        logger.debug("----------------------------------------------------------------------------------------------------------------------");
 
         return null;
     }

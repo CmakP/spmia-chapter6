@@ -12,11 +12,15 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Collections;
 import java.util.List;
 
-
+/**
+ * This dependency tells the Spring Cloud framework that this service will be running Zuul and initialize Zuul appropriately
+ */
 @SpringBootApplication
 @EnableZuulProxy
 public class ZuulServerApplication {
 
+    //Zuul will automatically use Eureka to look up services by their service IDs and then use
+    //Netflix Ribbon to do client-side load balancing of requests from within Zuul
     @LoadBalanced
     @Bean
     public RestTemplate getRestTemplate(){

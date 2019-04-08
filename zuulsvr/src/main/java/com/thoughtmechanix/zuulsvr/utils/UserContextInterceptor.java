@@ -8,7 +8,13 @@ import org.springframework.http.client.ClientHttpResponse;
 
 import java.io.IOException;
 
+/**
+ * This class is used to inject the correlation ID into any outgoing HTTP-based service requests being executed
+ * from a RestTemplate instance. This is done to ensure that you can establish a linkage between service calls.
+ */
 public class UserContextInterceptor implements ClientHttpRequestInterceptor {
+
+    //The intercept() method is invoked before the actual HTTP service call occurs by the RestTemplate.
     @Override
     public ClientHttpResponse intercept(
             HttpRequest request, byte[] body, ClientHttpRequestExecution execution)

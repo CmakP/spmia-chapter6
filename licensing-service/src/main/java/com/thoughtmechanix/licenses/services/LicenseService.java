@@ -35,8 +35,9 @@ public class LicenseService {
 
     @HystrixCommand
     public License getLicense(String organizationId,String licenseId) throws InterruptedException {
-       License license = licenseRepository.findByOrganizationIdAndLicenseId(organizationId, licenseId);
+        License license = licenseRepository.findByOrganizationIdAndLicenseId(organizationId, licenseId);
 
+        logger.debug("LicenseService.getLicense() - getting Organization info: {}", organizationId);
         Organization org = getOrganization(organizationId);
 
         return license
@@ -48,7 +49,8 @@ public class LicenseService {
     }
 
     @HystrixCommand
-    private Organization getOrganization(String organizationId) {
+    public Organization getOrganization(String organizationId) throws InterruptedException {
+        logger.debug("LicenseService.getOrganization() - getting Organization info: {}", organizationId);
         return organizationRestClient.getOrganization(organizationId);
     }
 

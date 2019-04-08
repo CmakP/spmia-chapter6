@@ -1,8 +1,8 @@
 package com.thoughtmechanix.licenses.controllers;
 
 import com.thoughtmechanix.licenses.model.License;
+import com.thoughtmechanix.licenses.model.Organization;
 import com.thoughtmechanix.licenses.services.LicenseService;
-import com.thoughtmechanix.licenses.config.ServiceConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,25 +23,27 @@ public class LicenseServiceController {
     private LicenseService licenseService;
 
     @Autowired
-    private ServiceConfig serviceConfig;
-
-    @Autowired
     private HttpServletRequest request;
 
     private static final Logger logger = LoggerFactory.getLogger(LicenseServiceController.class);
 
-
     @RequestMapping(value="/",method = RequestMethod.GET)
     public List<License> getLicenses( @PathVariable("organizationId") String organizationId) {
-
+        logger.debug("LicenseServiceController -> licenses/ - Found tmx-correlation-id in license-service-controller: {} ", request.getHeader("tmx-correlation-id"));
         return licenseService.getLicensesByOrg(organizationId);
     }
 
     @RequestMapping(value="/{licenseId}",method = RequestMethod.GET)
     public License getLicenses( @PathVariable("organizationId") String organizationId,
                                 @PathVariable("licenseId") String licenseId) throws InterruptedException {
-        logger.debug("Found tmx-correlation-id in license-service-controller: {} ", request.getHeader("tmx-correlation-id"));
+        logger.debug("LicenseServiceController -> licenses/{licenseId} - Found tmx-correlation-id in license-service-controller: {} ", request.getHeader("tmx-correlation-id"));
         return licenseService.getLicense(organizationId, licenseId);
+    }
+
+    @RequestMapping(value="/getOrganization",method = RequestMethod.GET)
+    public Organization getOrganization(@PathVariable("organizationId") String organizationId) throws InterruptedException {
+        logger.debug("LicenseServiceController -> /getOrganization - Found tmx-correlation-id in license-service-controller: {} ", request.getHeader("tmx-correlation-id"));
+        return licenseService.getOrganization(organizationId);
     }
 
     @RequestMapping(value="{licenseId}",method = RequestMethod.PUT)

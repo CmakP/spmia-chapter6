@@ -17,12 +17,21 @@ import java.util.List;
 @EnableCircuitBreaker
 public class Application {
 
-    @LoadBalanced
-    @Bean
+    /**
+     * The licensing service business logic needs to execute a call to the organization service.
+     * A RestTemplate is used to invoke the organization service. The RestTemplate will use a
+     * custom Spring Interceptor class (UserContextInterceptor) to inject the correlation ID into
+     * the outbound call as an HTTP header.
+     *
+     * With this bean definition in place, any time you use the @Autowired annotation and inject a RestTemplate
+     * into a class, you’ll use the RestTemplate created here with UserContextInterceptor attached to it.
+     */
+    @LoadBalanced //The @LoadBalanced annotation indicates that this RestTemplate object is going to use Ribbon.
+    @Bean // To use the UserContextInterceptor you need to define a RestTemplate bean and then add the UserContextInterceptor to it.
     public RestTemplate getRestTemplate(){
         RestTemplate template = new RestTemplate();
         List interceptors = template.getInterceptors();
-        if (interceptors==null){
+        if (interceptors==null){ //Adding the UserContextInterceptor to the RestTemplate instance that has been created
             template.setInterceptors(Collections.singletonList(new UserContextInterceptor()));
         }
         else{
